@@ -10,7 +10,7 @@ import os
 import math
 import json
 import pprint
-
+from atomic_radiis import atomic_radiis
 
 def plot_atoms_count_dist(atoms_list, pic_name):
     # 对最外层原子的元素名称进行统计
@@ -78,6 +78,32 @@ def get_shifted_structure(structure):
 
     return new_atoms_matrix, vacuum
 
+def merge_same_and_to_dict(most_atom_bond_info_list):
+    # most_atom_bond_info_list转化格式
+        result = {}
+        for sublist in most_atom_bond_info_list:
+            key = tuple(sublist)
+            if key in result:
+                result[key]['repeat_num'] += 1
+            else:
+                result[key] = {'symbol': sublist[0], 'length': sublist[1], 'repeat_num': 1}
+        return list(result.values())
+
+def get_near_outlayer_most_atoms_bond_infos(atoms2D, rows):
+    '''获取most原子成键信息'''
+    distances2D = atoms2D.get_all_distances(mic=True)
+    bond_info_list = [] # 存储所有 most 原子的bond信息
+    for row in rows:    # row:遍历所有 most 原子
+        most_atom_bond_info_list = [] # 存储单个 most 原子的bond信息
+        for j in range(distances2D.shape[1]): # col:遍历 所有 原子
+            atomic_radii_sum = atomic_radiis[atoms2D[row].symbol] + atomic_radiis[atoms2D[j].symbol]
+            if distances2D[row][j] > 0.1 and distances2D[row][j] < atomic_radii_sum * 1.4:
+                most_atom_bond_info_list.append([atoms2D[j].symbol, distances2D[row][j]])
+        
+        bond_info_list.append(merge_same_and_to_dict(most_atom_bond_info_list))
+    
+    unique_data = [x for i, x in enumerate(bond_info_list) if x not in bond_info_list[:i]] #去重
+    return unique_data
 
 def get_outlayer_infos(atoms: Atoms, distances, max_z_atom_idx: list, min_z_atom_idx: list, threshold=0.5):
     '''
@@ -85,38 +111,8 @@ def get_outlayer_infos(atoms: Atoms, distances, max_z_atom_idx: list, min_z_atom
     '''
     # 绝对长度转为相对值
     threshold = threshold/atoms.get_cell_lengths_and_angles()[2]
-    electronegativity = {
-        "H": 2.20, "He": 0, "Li": 0.98, "Be": 1.57, "B": 2.04, "C": 2.55, "N": 3.04,
-        "O": 3.44, "F": 3.98, "Ne": 0, "Na": 0.93, "Mg": 1.31, "Al": 1.61, "Si": 1.98,
-        "P": 2.19, "S": 2.58, "Cl": 3.16, "Ar": 0, "K": 0.82, "Ca": 1.00, "Sc": 1.36,
-        "Ti": 1.54, "V": 1.63, "Cr": 1.66, "Mn": 1.55, "Fe": 1.83, "Co": 1.88, "Ni": 1.92,
-        "Cu": 1.90, "Zn": 1.65, "Ga": 1.81, "Ge": 2.01, "As": 2.18, "Se": 2.55, "Br": 2.96,
-        "Kr": 3.00, "Rb": 0.82, "Sr": 0.95, "Y": 1.22, "Zr": 1.33, "Nb": 1.59, "Mo": 2.16,
-        "Tc": 1.91, "Ru": 2.2, "Rh": 2.28, "Pd": 2.20, "Ag": 1.93, "Cd": 1.69, "In": 1.78,
-        "Sn": 1.96, "Sb": 2.05, "Te": 2.12, "I": 2.66, "Xe": 2.60, "Cs": 0.79, "Ba": 0.89,
-        "La": 1.11, "Ce": 1.12, "Pr": 1.13, "Nd": 1.14, "Pm": 1.13, "Sm": 1.17, "Eu": 1.2,
-        "Gd": 1.21, "Tb": 1.13, "Dy": 1.22, "Ho": 1.23, "Er": 1.24, "Tm": 1.25, "Yb": 1.26,
-        "Lu": 1.27, "Hf": 1.32, "Ta": 1.51, "W": 2.36, "Re": 1.93, "Os": 2.18, "Ir": 2.20,
-        "Pt": 2.28, "Au": 2.54, "Hg": 2.00, "Tl": 1.62, "Pb": 1.87, "Bi": 2.02, "Po": 1.99, "At": 2.22, "Th": 1.3,
-        "Pa": 1.5, "U": 1.38, "Np": 1.36, "Pu": 1.28, "Am": 1.13, "Cm": 1.28, "Bk": 1.3,
-        "Cf": 1.3, "Es": 1.3, "Fm": 1.3, "Md": 1.3, "No": 1.3, "Lr": 1.3, "Rf": 1.3, "Db": 1.3,
-        "Sg": 1.3, "Bh": 1.3, "Hs": 1.3, "Mt": 1.3
-    }
-
-    atomic_radiis = {'H': 0.32, 'He': 0.46, 'Li': 1.33, 'Be': 1.02, 'B': 0.85, 'C': 0.75,
-                     'N': 0.71, 'O': 0.63, 'F': 0.64, 'Ne': 0.67, 'Na': 1.55, 'Mg': 1.39,
-                     'Al': 1.26, 'Si': 1.16, 'P': 1.11, 'S': 1.03, 'Cl': 0.99, 'Ar': 0.96,
-                     'K': 1.96, 'Ca': 1.71, 'Sc': 1.48, 'Ti': 1.36, 'V': 1.34, 'Cr': 1.22,
-                     'Mn': 1.19, 'Fe': 1.16, 'Ni': 1.10, 'Co': 1.11, 'Cu': 1.12, 'Zn': 1.18,
-                     'Ga': 1.24, 'Ge': 1.24, 'As': 1.21, 'Se': 1.16, 'Br': 1.14, 'Kr': 1.17,
-                     'Rb': 2.10, 'Sr': 1.85, 'Y': 1.63, 'Zr': 1.54, 'Nb': 1.47, 'Mo': 1.38,
-                     'Tc': 1.28, 'Ru': 1.25, 'Rh': 1.25, 'Pd': 1.20, 'Ag': 1.28, 'Cd': 1.36,
-                     'In': 1.42, 'Sn': 1.40, 'Sb': 1.40, 'Te': 1.36, 'I': 1.33, 'Xe': 1.31,
-                     'Cs': 2.32, 'Ba': 1.96, 'La': 1.80, 'Ce': 1.63, 'Pr': 1.76, 'Nd': 1.74,
-                     'Pm': 1.73, 'Sm': 1.72, 'Eu': 1.68, 'Gd': 1.69, 'Tb': 1.68, 'Dy': 1.67,
-                     'Ho': 1.66, 'Er': 1.65, 'Tm': 1.64, 'Yb': 1.70, 'Lu': 1.62, 'Hf': 1.52,
-                     'Ta': 1.46, 'W': 1.37, 'Re': 1.31, 'Os': 1.29, 'Ir': 1.22, 'Pt': 1.23,
-                     'Au': 1.24, 'Hg': 1.33, 'Tl': 1.44, 'Pb': 1.44, 'Bi': 1.51}
+    from atomic_electronegativity import electronegativity
+    
     res = {"outlayer_infos": [], 'ave_saturation': 0, 
            "near_outlayer_infos":{"threshold":threshold,"near_outlayer_total_cnt":0}}
     
@@ -143,10 +139,11 @@ def get_outlayer_infos(atoms: Atoms, distances, max_z_atom_idx: list, min_z_atom
             return None
     res['ave_saturation'] /= len(target_atom_idx)
 
-    # 统计近外层数目最多原子及其占比，max_atom_z - threshold 和 min_atom_z + threshold
-    # 范围内原子合并计数
-    atom_count = {}
+    # 统计近外层数目最多原子及其占比，max_atom_z - threshold 和 min_atom_z + threshold范围内原子合并计数
+    atom_count = {} # 近外层原子种类计数
+    atom_idx = {}   # 记录近外层原子index
     near_outlayer_total_cnt = 0
+    distances = atoms.get_all_distances(mic=True)
     positions = atoms.get_scaled_positions()
     for i in range(len(atoms)):
         atom = atoms[i]
@@ -154,17 +151,31 @@ def get_outlayer_infos(atoms: Atoms, distances, max_z_atom_idx: list, min_z_atom
             or positions[i,2] < positions[min_z_atom_idx[0], 2]+threshold:
             near_outlayer_total_cnt += 1
             atom_type = atom.symbol
+            if atom_type in atom_idx:
+                atom_idx[atom_type].append(i)
+            else:
+                atom_idx[atom_type] = [i]
             if atom_type in atom_count:
                 atom_count[atom_type] += 1
             else:
                 atom_count[atom_type] = 1
 
-    max_count_atom_type = max(atom_count, key=atom_count.get)
-    max_atom_count = atom_count[max_count_atom_type]
+
+    max_value = max(atom_count.values())
+    max_count_atom_type = [atom for atom, count in atom_count.items() if count == max_value]
+    max_atom_count = [atom_count[atom_type] for atom_type in max_count_atom_type]
+    
+    #获取近外层占比最多原子的成键信息
+    max_atom_bond_infos = []
+    for t in max_count_atom_type: # 有多种most原子时
+        bond_info = get_near_outlayer_most_atoms_bond_infos(atoms, atom_idx[t])
+        max_atom_bond_infos.append(bond_info)
+        
     res["near_outlayer_infos"]["near_outlayer_total_cnt"] = near_outlayer_total_cnt
     res["near_outlayer_infos"]["max_atom"] = max_count_atom_type
     res["near_outlayer_infos"]["max_atom_count"] = max_atom_count
-    res["near_outlayer_infos"]["max_atom_ratio"] = max_atom_count/near_outlayer_total_cnt
+    res["near_outlayer_infos"]["max_atom_ratio"] = [max_atom_count[i]/near_outlayer_total_cnt for i in range(len(max_atom_count))]
+    res["near_outlayer_infos"]["max_atom_bond_infos"] = max_atom_bond_infos
     return res
 
 
@@ -214,11 +225,12 @@ if __name__ == "__main__":
             print(infos["outlayer_infos"][1]['outer_atom_symbol'])
             
             # 近外层占比最大的原子信息
-            near_outer_atoms.append(infos["near_outlayer_infos"]["max_atom"])
-            print(infos["near_outlayer_infos"]["max_atom"])  # 近外层占比最大的原子符号
-            print(infos["near_outlayer_infos"]["max_atom_count"]) # 近外层占比最大的原子数量
+            near_outer_atoms.append(infos["near_outlayer_infos"]["max_atom"][0])
+            print(infos["near_outlayer_infos"]["max_atom"][0])  # 近外层占比最大的原子符号
+            print(infos["near_outlayer_infos"]["max_atom_count"][0]) # 近外层占比最大的原子数量
             print(infos["near_outlayer_infos"]["near_outlayer_total_cnt"]) # 近外层原子总数
-            print(infos["near_outlayer_infos"]["max_atom_ratio"]) # 近外层占比最大的原子比例
+            print(infos["near_outlayer_infos"]["max_atom_ratio"][0]) # 近外层占比最大的原子比例
+            print(infos["near_outlayer_infos"]["max_atom_bond_infos"][0]) # 近外层占比最大的原子成键信息
             if infos["near_outlayer_infos"]["max_atom_ratio"]==0.5:
                 half_cnt += 1
             all_infos[f] = infos
