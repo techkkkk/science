@@ -13,10 +13,11 @@ import pprint
 from atomic_radiis import atomic_radiis
 from copy import deepcopy
 
+
 def is_same_pos(x, y):
     return (x[0]-y[0])**2 + (x[1]-y[1])**2 + (x[2]-y[2])**2 < 0.01
 
-def mark_is_ok(f3D, near_outlayer_infos, thred1=0.01, thred2=0.1):
+def mark_is_ok(f3D, near_outlayer_infos, thred1=0.1, thred2=0.1):
     """是否需要标记
 
     Args:
@@ -34,6 +35,7 @@ def mark_is_ok(f3D, near_outlayer_infos, thred1=0.01, thred2=0.1):
             
     max_atom = near_outlayer_infos["max_atom"][0]
     # print(bond_infos_in2D)    
+    matched_cnt = 0
     for i in range(len(atoms3D)): # 遍历所有 3D 原子
         if atoms3D[i].symbol == max_atom:   # 与2D最外层元素相同的 3D 原子
             atoms3D_bonds = []
@@ -43,16 +45,17 @@ def mark_is_ok(f3D, near_outlayer_infos, thred1=0.01, thred2=0.1):
                     atoms3D_bonds.append( [atoms3D[j].symbol, distances3D[i][j] ] )
             
             # 与 2D 的成键信息比对
-            for bonds in bond_infos_in2D: # 遍历所有 2D 最外层原子成键信息
+            for bonds in bond_infos_in2D: # 遍历所有 2D 最外层原子的成键信息
                 bonds_2D = deepcopy(bonds)
                 bonds_3D = deepcopy(atoms3D_bonds)
                 bonds_3D_matched_indices = []
                 for i, bond3D in enumerate(bonds_3D): # 遍历 3D 原子的每一个键
-                    for bond2D in bonds_2D: # 遍历单个 2D 最外层原子的成键键信息
+                    for j, bond2D in enumerate(bonds_2D): # 遍历单个 2D 最外层原子的成键键信息
                         if bond3D[0] == bond2D['symbol'] and abs(bond3D[1]-bond2D['length'])<thred1 \
                         and bond2D['repeat_num'] > 0:
                             bonds_3D_matched_indices.append(i)
                             bond2D['repeat_num'] -= 1
+                            break
                             
                 # 匹配完后检查是否匹配成功(repeat_num==0)，是否需要mark(bonds_3D剩余有类似键长)：
                 all_matched = True
@@ -61,13 +64,17 @@ def mark_is_ok(f3D, near_outlayer_infos, thred1=0.01, thred2=0.1):
                         all_matched = False
                         break
                 if all_matched: # 如果匹配成功，检查需要mark(bonds_3D剩余有类似键长)：
-                    
+                    matched_cnt += 1
                     for i, bond3D in enumerate(bonds_3D):
                         if i not in bonds_3D_matched_indices: # 检查未匹配的键长：
                             if bond3D[0] == bond2D['symbol'] and abs(bond3D[1]-bond2D['length'])<thred2:
-                                print(f"should mark {bond3D[0]}")
-                                return True
-    return False
+                                print(f"should mark {max_atom}")
+                                return [0, max_atom]
+
+    print(f"matched_cnt={matched_cnt} len(bond_infos_in2D)={len(bond_infos_in2D)}")
+    if matched_cnt < len(bond_infos_in2D):
+        return [1, 1]
+    return [2, 2]
     
 def get_near_outlayer_infos(poscar_file, info_file="2D_structure_all_infos.json"):
     '''读取近外层信息'''
@@ -78,10 +85,20 @@ def get_near_outlayer_infos(poscar_file, info_file="2D_structure_all_infos.json"
         return get_near_outlayer_infos.all_infos_dict[poscar_file]["near_outlayer_infos"]
     else:
         return None
+
+def get_3D_filename(f2D, poscar_files_3D):
+    """ 获取与2D对应的3D file_name """
+    for f in poscar_files_3D:
+        if os.path.basename(f2D) in f:
+            return f
+    return None
+    
     
 if __name__ == "__main__":
     
-    error_cnt = 0
+    dout_cnt = 0
+    res = ""
+    error_cnt, pass_cnt = 0, 0
     near_outer_atoms_infos_dict = {}  # 保存所有信息
 
     # 读取structures文件夹下的所有POSCAR文件
@@ -89,15 +106,29 @@ if __name__ == "__main__":
     poscar_files_3D = glob.glob(os.path.join("3D_structure", "POSCAR*"))  
       
     for i, f2D in enumerate(poscar_files_2D):
-        f3D = poscar_files_3D[i]
+        # if  f2D !="2D_structure\POSCAR1001":
+        #     continue
+        f3D = get_3D_filename(f2D, poscar_files_3D)
+        if f3D is None:
+            print(f"[{i}] 跳过{f2D}")
+            pass_cnt += 1
+            continue
+        
         print(f"[{i}] 开始处理{f2D}")
         near_outlayer_infos = get_near_outlayer_infos(f2D)
         if near_outlayer_infos:
-            mark_is_ok(f3D, near_outlayer_infos)
+            status, res_atom = mark_is_ok(f3D, near_outlayer_infos)
+            if status == 0:
+                res += f"{f3D} {res_atom}\n"
+            elif status == 1:
+                dout_cnt += 1
         else:
             error_cnt += 1
         print(f"[{i}] 结束处理{f2D}\n")
 
-    print(f"finished, total cnt: {len(poscar_files_2D)}, error cnt: {error_cnt}")
+    print(f"finished, total cnt: {len(poscar_files_2D)}, error cnt: {error_cnt}, pass cnt:{pass_cnt}")
+    print(f"dout_cnt {dout_cnt}")
+    with open("mark_result.txt", 'w') as f:
+        f.write(res)
 
 
