@@ -14,10 +14,29 @@ from atomic_radiis import atomic_radiis
 from copy import deepcopy
 
 
+def plot_atoms_count_dist(atoms_list, pic_name):
+    counter_unsort = Counter(atoms_list)
+    counter = dict(counter_unsort.most_common())
+    # # 保存统计结果到文本文件
+    with open(f"{pic_name}_statistics.txt", "w") as f:
+        f.write("Element\tCount\n")
+        for element, count in counter.items():
+            f.write(f"{element}\t{count}\n")
+
+    # 绘制统计图
+    elements, counts = zip(*counter.items())
+    plt.bar(elements, counts)
+    plt.xlabel("Elements")
+    plt.ylabel("Counts")
+    plt.xticks(rotation=45)
+    plt.title(f"Counts_of_{pic_name}")
+    plt.savefig(f"Counts_of_{pic_name}.png",dpi = 500)
+
+
 def is_same_pos(x, y):
     return (x[0]-y[0])**2 + (x[1]-y[1])**2 + (x[2]-y[2])**2 < 0.01
 
-def mark_is_ok(f3D, near_outlayer_infos, thred1=0.1, thred2=0.1):
+def mark_is_ok(f3D, near_outlayer_infos, thred1=0.2, thred2=0.2):
     """是否需要标记
 
     Args:
@@ -67,9 +86,10 @@ def mark_is_ok(f3D, near_outlayer_infos, thred1=0.1, thred2=0.1):
                     matched_cnt += 1
                     for i, bond3D in enumerate(bonds_3D):
                         if i not in bonds_3D_matched_indices: # 检查未匹配的键长：
-                            if bond3D[0] == bond2D['symbol'] and abs(bond3D[1]-bond2D['length'])<thred2:
-                                print(f"should mark {max_atom}")
-                                return [0, max_atom]
+                            for bond2D in bonds_2D:
+                                if bond3D[0] == bond2D['symbol'] and abs(bond3D[1]-bond2D['length'])<thred2:
+                                    print(f"should mark {max_atom}")
+                                    return [0, max_atom]
 
     print(f"matched_cnt={matched_cnt} len(bond_infos_in2D)={len(bond_infos_in2D)}")
     if matched_cnt < len(bond_infos_in2D):
@@ -100,6 +120,7 @@ if __name__ == "__main__":
     res = ""
     error_cnt, pass_cnt = 0, 0
     near_outer_atoms_infos_dict = {}  # 保存所有信息
+    mark_atom = [] # 保存需要标记的原子符号
 
     # 读取structures文件夹下的所有POSCAR文件
     poscar_files_2D = glob.glob(os.path.join("2D_structure", "POSCAR*"))  
@@ -120,15 +141,16 @@ if __name__ == "__main__":
             status, res_atom = mark_is_ok(f3D, near_outlayer_infos)
             if status == 0:
                 res += f"{f3D} {res_atom}\n"
+                mark_atom.append(res_atom)
             elif status == 1:
                 dout_cnt += 1
         else:
             error_cnt += 1
         print(f"[{i}] 结束处理{f2D}\n")
 
-    print(f"finished, total cnt: {len(poscar_files_2D)}, error cnt: {error_cnt}, pass cnt:{pass_cnt}")
+    print(f"finished, total cnt: {len(poscar_files_2D)}, mark_cnt:{len(mark_atom)}, error cnt: {error_cnt}, pass cnt:{pass_cnt}")
     print(f"dout_cnt {dout_cnt}")
     with open("mark_result.txt", 'w') as f:
         f.write(res)
-
+    plot_atoms_count_dist(mark_atom, "mark_result")
 

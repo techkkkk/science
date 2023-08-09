@@ -97,7 +97,7 @@ def get_near_outlayer_most_atoms_bond_infos(atoms2D, rows):
         most_atom_bond_info_list = [] # 存储单个 most 原子的bond信息
         for j in range(distances2D.shape[1]): # col:遍历 所有 原子
             atomic_radii_sum = atomic_radiis[atoms2D[row].symbol] + atomic_radiis[atoms2D[j].symbol]
-            if distances2D[row][j] > 0.1 and distances2D[row][j] < atomic_radii_sum * 1.4:
+            if distances2D[row][j] > 0.1 and distances2D[row][j] < atomic_radii_sum * 1.2:
                 most_atom_bond_info_list.append([atoms2D[j].symbol, distances2D[row][j]])
         
         bond_info_list.append(merge_same_and_to_dict(most_atom_bond_info_list))
@@ -124,7 +124,7 @@ def get_outlayer_infos(atoms: Atoms, distances, max_z_atom_idx: list, min_z_atom
         single_atom_bond_quality = electronegativity[atoms[i].symbol]
         for j in range(distances.shape[1]):
             atomic_radii_sum = atomic_radiis[atoms[i].symbol] + atomic_radiis[atoms[j].symbol]
-            if distances[i][j] > 0.1 and distances[i][j] < atomic_radii_sum * 1.4:
+            if distances[i][j] > 0.1 and distances[i][j] < atomic_radii_sum * 1.2:
                 outer_bonds = {"connected_atom_symbol": atoms[j].symbol, "atomic_radii_sum": atomic_radii_sum,
                                "real_distance": distances[i][j]}
                 #             outer_bonds['single_bond_quality'] = 0.5 * math.exp(3*(atomic_radii_sum - distances[i][j])/atomic_radii_sum)
@@ -186,7 +186,8 @@ def get_information(poscar_file = "POSCAR1"):
 
         new_atoms_matrix, vacuum = get_shifted_structure(atoms)
         atoms.set_scaled_positions(new_atoms_matrix)
-
+        from ase.io import write
+        write("0POSCAR", atoms)
         distances = atoms.get_all_distances(mic=True)  # 使用周期性边界条件计算距离
 
         # 获取z轴的最外层原子
@@ -216,6 +217,8 @@ if __name__ == "__main__":
     poscar_files = glob.glob(os.path.join(structures_dir, "POSCAR*"))  
       
     for f in poscar_files:
+        # if "1033" not in f:
+        #     continue
         print(f"开始处理{f}")
         infos = get_information(f)
         if infos:
