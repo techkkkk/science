@@ -89,15 +89,16 @@ def merge_same_and_to_dict(most_atom_bond_info_list):
                 result[key] = {'symbol': sublist[0], 'length': sublist[1], 'repeat_num': 1}
         return list(result.values())
 
-def get_near_outlayer_most_atoms_bond_infos(atoms2D, rows):
+def get_near_outlayer_most_atoms_bond_infos(atoms2D, rows, ratio=1.2):
     '''获取most原子成键信息'''
+    '''ratio (float): 3D原子成键判断标准：原子距离<ratio*原子半径之和'''
     distances2D = atoms2D.get_all_distances(mic=True)
     bond_info_list = [] # 存储所有 most 原子的bond信息
     for row in rows:    # row:遍历所有 most 原子
         most_atom_bond_info_list = [] # 存储单个 most 原子的bond信息
         for j in range(distances2D.shape[1]): # col:遍历 所有 原子
             atomic_radii_sum = atomic_radiis[atoms2D[row].symbol] + atomic_radiis[atoms2D[j].symbol]
-            if distances2D[row][j] > 0.1 and distances2D[row][j] < atomic_radii_sum * 1.2:
+            if distances2D[row][j] > 0.1 and distances2D[row][j] < atomic_radii_sum * ratio:
                 most_atom_bond_info_list.append([atoms2D[j].symbol, distances2D[row][j]])
         
         bond_info_list.append(merge_same_and_to_dict(most_atom_bond_info_list))
@@ -105,9 +106,10 @@ def get_near_outlayer_most_atoms_bond_infos(atoms2D, rows):
     unique_data = [x for i, x in enumerate(bond_info_list) if x not in bond_info_list[:i]] #去重
     return unique_data
 
-def get_outlayer_infos(atoms: Atoms, distances, max_z_atom_idx: list, min_z_atom_idx: list, threshold=0.5):
+def get_outlayer_infos(atoms: Atoms, distances, max_z_atom_idx: list, min_z_atom_idx: list, threshold=0.5, ratio=1.2):
     '''
         threshold:近外层范围R的阈值, R > max_atom_z - threshold.或 R < min_atom_z + threshold
+        ratio (float): 3D原子成键判断标准：原子距离<ratio*原子半径之和
     '''
     # 绝对长度转为相对值
     threshold = threshold/atoms.get_cell_lengths_and_angles()[2]
@@ -124,7 +126,7 @@ def get_outlayer_infos(atoms: Atoms, distances, max_z_atom_idx: list, min_z_atom
         single_atom_bond_quality = electronegativity[atoms[i].symbol]
         for j in range(distances.shape[1]):
             atomic_radii_sum = atomic_radiis[atoms[i].symbol] + atomic_radiis[atoms[j].symbol]
-            if distances[i][j] > 0.1 and distances[i][j] < atomic_radii_sum * 1.2:
+            if distances[i][j] > 0.1 and distances[i][j] < atomic_radii_sum * ratio:
                 outer_bonds = {"connected_atom_symbol": atoms[j].symbol, "atomic_radii_sum": atomic_radii_sum,
                                "real_distance": distances[i][j]}
                 #             outer_bonds['single_bond_quality'] = 0.5 * math.exp(3*(atomic_radii_sum - distances[i][j])/atomic_radii_sum)
@@ -168,7 +170,7 @@ def get_outlayer_infos(atoms: Atoms, distances, max_z_atom_idx: list, min_z_atom
     #获取近外层占比最多原子的成键信息
     max_atom_bond_infos = []
     for t in max_count_atom_type: # 有多种most原子时
-        bond_info = get_near_outlayer_most_atoms_bond_infos(atoms, atom_idx[t])
+        bond_info = get_near_outlayer_most_atoms_bond_infos(atoms, atom_idx[t], ratio)
         max_atom_bond_infos.append(bond_info)
         
     res["near_outlayer_infos"]["near_outlayer_total_cnt"] = near_outlayer_total_cnt
@@ -194,7 +196,7 @@ def get_information(poscar_file = "POSCAR1"):
         max_z_atom_idx = [np.argmax(atoms.get_scaled_positions()[:, 2])]
         min_z_atom_idx = [np.argmin(atoms.get_scaled_positions()[:, 2])]
 
-        outlayer_infos = get_outlayer_infos(atoms, distances, max_z_atom_idx, min_z_atom_idx, threshold=0.1)
+        outlayer_infos = get_outlayer_infos(atoms, distances, max_z_atom_idx, min_z_atom_idx, threshold=0.1, ratio=1.2)
 
         return outlayer_infos
     
