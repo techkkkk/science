@@ -36,12 +36,13 @@ def plot_atoms_count_dist(atoms_list, pic_name):
 def is_same_pos(x, y):
     return (x[0]-y[0])**2 + (x[1]-y[1])**2 + (x[2]-y[2])**2 < 0.01
 
-def mark_is_ok(f3D, near_outlayer_infos, thred1=0.05, thred2=0.05):
+def mark_is_ok(f3D, near_outlayer_infos, ratio=1.2, thred1=0.05, thred2=0.05):
     """是否需要标记
 
     Args:
         f3D (_type_): 3D file
         near_outlayer_infos (_type_): _description_
+        ratio (float): 3D原子成键判断标准：原子距离<ratio*原子半径之和
         thred1 (float): 判断2D 3D键长是否相同的长度误差
         thred2 (float): 判断匹配之后，剩余 3D键长是否与已匹配键长处于相同长度范围的阈值
     """
@@ -60,7 +61,7 @@ def mark_is_ok(f3D, near_outlayer_infos, thred1=0.05, thred2=0.05):
             atoms3D_bonds = []
             for j in range(distances3D.shape[1]): # 记录3D原子的成键信息
                 atomic_radii_sum = atomic_radiis[atoms3D[i].symbol] + atomic_radiis[atoms3D[j].symbol]
-                if distances3D[i][j] > 0.1 and distances3D[i][j] < atomic_radii_sum * 1.2:
+                if distances3D[i][j] > 0.1 and distances3D[i][j] < atomic_radii_sum * ratio:
                     atoms3D_bonds.append( [atoms3D[j].symbol, distances3D[i][j] ] )
             
             # 与 2D 的成键信息比对
@@ -116,7 +117,7 @@ def get_3D_filename(f2D, poscar_files_3D):
     
 if __name__ == "__main__":
     
-    dout_cnt = 0
+    doubt_cnt = 0
     mark_res = ""
     dout_res = ""
     error_cnt, pass_cnt = 0, 0
@@ -144,14 +145,14 @@ if __name__ == "__main__":
                 mark_res += f"{f3D} {res_atom}\n"
                 mark_atom.append(res_atom)
             elif status == 1:
-                dout_cnt += 1
+                doubt_cnt += 1
                 dout_res += f"{f3D} {res_atom}\n"
         else:
             error_cnt += 1
         print(f"[{i}] 结束处理{f2D}\n")
 
     print(f"finished, total cnt: {len(poscar_files_2D)}, mark_cnt:{len(mark_atom)}, error cnt: {error_cnt}, pass cnt:{pass_cnt}")
-    print(f"dout_cnt {dout_cnt}")
+    print(f"doubt_cnt {doubt_cnt}")
     with open("mark_result.txt", 'w') as f:
         f.write(mark_res+"\n\n"+dout_res)
     plot_atoms_count_dist(mark_atom, "mark_result")
